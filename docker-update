@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+exclude=(
+    ARCHIVE
+)
+
+basedir='/home/ubuntu/artix-server'
+
+has_update() { [[ -z "$(printf '%s\n' "${@}" | sort | uniq -d)" ]]; }
+
+err() { [[ 0 != $? ]]; }
+
+main() {
+    local d
+    walk -d 0 "$basedir" \
+        | sor 'test -d' \
+        | grep -vE "${exclude[*]}" \
+        | while read -r d; do
+            local ids=()
+            pushd "$d" >/dev/null
+            ids=$(docker compose images -q)
+            docker compose pull 2>/dev/null
+            if err; then
+                echo "error"
+                popd >/dev/null
+                continue
+            fi
+
+            ids+=( "$(docker compose images -q)" )
+            if ! has_update "${ids[@]}"; then
+                #echo "$(pwd) no new image"
+                popd >/dev/null
+                continue
+            fi
+
+            curl -d "$(basename "$(pwd)") has update" https://ntfy.daedalist.net/0xDEADBEA7
+            popd >/dev/null
+        done
+
+}; main "$@"
