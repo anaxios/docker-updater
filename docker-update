@@ -3,9 +3,10 @@
 set -eo pipefail
 
 source "$HOME/.secrets"
-PATH="$HOME/bin:${PATH}"
 NTFY_URL="$DOCKER_UPDATER_NTFY_URL"
 BASEDIR="$DOCKER_UPDATER_BASEDIR"
+
+echo "$(date)"
 
 exclusions=(
     ARCHIVE
@@ -21,39 +22,45 @@ has_update() { [[ -z "$(printf '%s\n' "${@}" | sort | uniq -d)" ]]; }
 err() { [[ 0 != "$1" ]]; }
 
 main() {
-    local d
-    walk -d 0 "$BASEDIR" \
-        | sor 'test -d' \
-        | grep -vE "${exclusions[*]}" \
-        | while read -r d; do
-            local ids=()
-            pushd "$d" >/dev/null
-            ids="$(docker compose images -q)"
-            docker compose pull 2>/dev/null
-            if err "$?"; then
-                echo "error" >&2
-                popd >/dev/null
-                continue
+    for d in "$BASEDIR"/*; do
+        for exclude in "${exclusions[@]}"; do
+            if [[ "$exclude" == "$(basename "$d")" ]]; then
+                continue 2
             fi
-
-            ids+=( "$(docker compose images -q)" )
-            if ! has_update "${ids[@]}"; then
-                #echo "$(pwd) no new image"
-                popd >/dev/null
-                continue
-            fi
-
-            curl -d "$d has update" "$DOCKER_UPDATER_NTFY_URL"
-
-            for project in "${auto_update_list[@]}"; do
-                if [[ "$project_name" == "$d" ]]; then
-                    docker compose up -d
-                    curl -d "$d was auto updated" "$DOCKER_UPDATER_NTFY_URL"
-                    popd >/dev/null
-                    continue
-                fi
-            done
-            popd >/dev/null
         done
+
+        local ids=()
+        pushd "$d" >/dev/null
+        ids="$(docker compose images -q)"
+        docker compose pull #2>/dev/null
+        if err "$?"; then
+            echo "error" >&2
+            popd >/dev/null
+            continue
+        fi
+
+        ids+=( "$(docker compose images -q)" )
+        if ! has_update "${ids[@]}"; then
+            #echo "$(pwd) no new image"
+            popd >/dev/null
+            continue
+        fi
+
+
+        for project_name in "${auto_update_list[@]}"; do
+            if [[ "$project_name" == "$(basename "$d")" ]]; then
+                docker compose up -d
+                curl -d "$HOSTNAME: $d was auto updated" "$DOCKER_UPDATER_NTFY_URL"
+                echo "$HOSTNAME: $d was auto updated"
+                popd >/dev/null
+                continue 2
+            fi
+        done
+
+        curl -d "$HOSTNAME: $d has an update" "$DOCKER_UPDATER_NTFY_URL"
+        echo "$HOSTNAME: $d has an update"
+
+        popd >/dev/null
+    done
 
 }; main "$@"
