@@ -17,7 +17,7 @@ auto_update_list=(
 )
 
 
-has_update() { [[ -z "$(printf '%s\n' "${@}" | sort | uniq -d)" ]]; }
+has_update() { [[ ! -n "$(printf '%s\n' "${@}" | sort | uniq -d)" ]]; }
 
 err() { [[ 0 != "$1" ]]; }
 
@@ -41,7 +41,7 @@ main() {
 
         ids+=( "$(docker compose images -q)" )
         if ! has_update "${ids[@]}"; then
-            #echo "$(pwd) no new image"
+            #echo "$(pwd) ${ids[@]}"
             popd >/dev/null
             continue
         fi
