@@ -45,7 +45,7 @@ main() {
             continue
         fi
 
-        ids+=( "$(docker compose images -q)" )
+        ids+=( $(docker compose images -q) )
         if ! has_update "${ids[@]}"; then
             #echo "$(pwd) ${ids[@]}"
             popd >/dev/null
